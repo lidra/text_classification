@@ -64,7 +64,7 @@ class HierarchicalAttention:
 
     def attention_word_level(self, hidden_state):
         """
-        input1:self.hidden_state: hidden_state:list,len:sentence_length,element:[batch_size*num_sentences,hidden_size*2]
+        input1:self.hidden_state: hidden_state:list,len: sentence_length, element:[batch_size*num_sentences,hidden_size*2]
         input2:sentence level context vector:[batch_size*num_sentences,hidden_size*2]
         :return:representation.shape:[batch_size*num_sentences,hidden_size*2]
         """
@@ -134,17 +134,24 @@ class HierarchicalAttention:
         """main computation graph here: 1.Word Encoder. 2.Word Attention. 3.Sentence Encoder 4.Sentence Attention 5.linear classifier"""
         # 1.Word Encoder
         # 1.1 embedding of words
-        input_x = tf.split(self.input_x, self.num_sentences,axis=1)  # a list. length:num_sentences.each element is:[None,self.sequence_length/num_sentences]
-        input_x = tf.stack(input_x, axis=1)  # shape:[None,self.num_sentences,self.sequence_length/num_sentences]
+        input_x = tf.split(self.input_x, self.num_sentences,axis=1) 
+        # a list. length:num_sentences.each element is:[None,self.sequence_length/num_sentences]
+        input_x = tf.stack(input_x, axis=1)  
+        # shape:[None,self.num_sentences,self.sequence_length/num_sentences]
         self.embedded_words = tf.nn.embedding_lookup(self.Embedding,input_x)  # [None,num_sentences,sentence_length,embed_size]
-        embedded_words_reshaped = tf.reshape(self.embedded_words, shape=[-1, self.sequence_length,self.embed_size])  # [batch_size*num_sentences,sentence_length,embed_size]
+        embedded_words_reshaped = tf.reshape(self.embedded_words, shape=[-1, self.sequence_length,self.embed_size])  
+        # [batch_size*num_sentences,sentence_length,embed_size]
         # 1.2 forward gru
-        hidden_state_forward_list = self.gru_forward_word_level(embedded_words_reshaped)  # a list,length is sentence_length, each element is [batch_size*num_sentences,hidden_size]
+        hidden_state_forward_list = self.gru_forward_word_level(embedded_words_reshaped)  
+        # a list,length is sentence_length, each element is [batch_size*num_sentences,hidden_size]
         # 1.3 backward gru
-        hidden_state_backward_list = self.gru_backward_word_level(embedded_words_reshaped)  # a list,length is sentence_length, each element is [batch_size*num_sentences,hidden_size]
-        # 1.4 concat forward hidden state and backward hidden state. hidden_state: a list.len:sentence_length,element:[batch_size*num_sentences,hidden_size*2]
+        hidden_state_backward_list = self.gru_backward_word_level(embedded_words_reshaped)  
+        # a list,length is sentence_length, each element is [batch_size*num_sentences,hidden_size]
+        # 1.4 concat forward hidden state and backward hidden state. 
+        # hidden_state: a list.len:sentence_length,element:[batch_size*num_sentences,hidden_size*2]
         self.hidden_state = [tf.concat([h_forward, h_backward], axis=1) for h_forward, h_backward in
-                             zip(hidden_state_forward_list, hidden_state_backward_list)]  # hidden_state:list,len:sentence_length,element:[batch_size*num_sentences,hidden_size*2]
+                             zip(hidden_state_forward_list, hidden_state_backward_list)]  
+        # hidden_state:list,len:sentence_length,element:[batch_size*num_sentences,hidden_size*2]
 
         # 2.Word Attention
         # for each sentence.
@@ -155,9 +162,11 @@ class HierarchicalAttention:
 
         # 3.Sentence Encoder
         # 3.1) forward gru for sentence
-        hidden_state_forward_sentences = self.gru_forward_sentence_level(sentence_representation)  # a list.length is sentence_length, each element is [None,hidden_size]
+        hidden_state_forward_sentences = self.gru_forward_sentence_level(sentence_representation)  
+        # a list.length is sentence_length, each element is [None,hidden_size]
         # 3.2) backward gru for sentence
-        hidden_state_backward_sentences = self.gru_backward_sentence_level(sentence_representation)  # a list,length is sentence_length, each element is [None,hidden_size]
+        hidden_state_backward_sentences = self.gru_backward_sentence_level(sentence_representation)  
+        # a list,length is sentence_length, each element is [None,hidden_size]
         # 3.3) concat forward hidden state and backward hidden state
         # below hidden_state_sentence is a list,len:sentence_length,element:[None,hidden_size*2]
         self.hidden_state_sentence = [tf.concat([h_forward, h_backward], axis=1) for h_forward, h_backward in zip(hidden_state_forward_sentences, hidden_state_backward_sentences)]
@@ -258,12 +267,16 @@ class HierarchicalAttention:
         """
         # split embedded_words
         embedded_words_splitted = tf.split(embedded_words, self.sequence_length,
-                                           axis=1)  # it is a list,length is sentence_length, each element is [batch_size*num_sentences,1,embed_size]
+                                           axis=1)  
+        # it is a list,length is sentence_length, each element is [batch_size*num_sentences,1,embed_size]
         embedded_words_squeeze = [tf.squeeze(x, axis=1) for x in
-                                  embedded_words_splitted]  # it is a list,length is sentence_length, each element is [batch_size*num_sentences,embed_size]
+                                  embedded_words_splitted]  
+        # it is a list,length is sentence_length, each element is [batch_size*num_sentences,embed_size]
         # demension_1=embedded_words_squeeze[0].get_shape().dims[0]
         h_t = tf.ones((self.batch_size * self.num_sentences,
-                       self.hidden_size))  #TODO self.hidden_size h_t =int(tf.get_shape(embedded_words_squeeze[0])[0]) # tf.ones([self.batch_size*self.num_sentences, self.hidden_size]) # [batch_size*num_sentences,embed_size]
+                       self.hidden_size))  
+        #TODO self.hidden_size h_t =int(tf.get_shape(embedded_words_squeeze[0])[0]) 
+        # tf.ones([self.batch_size*self.num_sentences, self.hidden_size]) # [batch_size*num_sentences,embed_size]
         h_t_forward_list = []
         for time_step, Xt in enumerate(embedded_words_squeeze):  # Xt: [batch_size*num_sentences,embed_size]
             h_t = self.gru_single_step_word_level(Xt,h_t)  # [batch_size*num_sentences,embed_size]<------Xt:[batch_size*num_sentences,embed_size];h_t:[batch_size*num_sentences,embed_size]
